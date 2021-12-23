@@ -3,6 +3,7 @@ package yoda
 import (
 	"context"
 	"errors"
+	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog"
@@ -28,6 +29,22 @@ var (
 type Yoda struct {
 	handle framework.Handle
 	cache  cache.Cache
+}
+
+func (y *Yoda) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
+	panic("implement me")
+}
+
+func (y *Yoda) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	panic("implement me")
+}
+
+func (y *Yoda) PreFilter(ctx context.Context, state *framework.CycleState, p *v1.Pod) *framework.Status {
+	panic("implement me")
+}
+
+func (y *Yoda) PreFilterExtensions() framework.PreFilterExtensions {
+	panic("implement me")
 }
 
 func (y *Yoda) Name() string {
