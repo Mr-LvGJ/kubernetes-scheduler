@@ -1,7 +1,7 @@
 package register
 
 import (
-	"github.com/NJUPT-ISL/Yoda-Scheduler/pkg/yoda"
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda"
 	"github.com/spf13/cobra"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 )

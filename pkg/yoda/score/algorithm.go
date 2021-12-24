@@ -3,9 +3,9 @@ package score
 import (
 	"errors"
 
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/collection"
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/filter"
 	scv "github.com/NJUPT-ISL/SCV/api/v1"
-	"github.com/NJUPT-ISL/Yoda-Scheduler/pkg/yoda/collection"
-	"github.com/NJUPT-ISL/Yoda-Scheduler/pkg/yoda/filter"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
