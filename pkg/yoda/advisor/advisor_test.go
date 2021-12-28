@@ -1,8 +1,8 @@
 package advisor
 
 import (
-"fmt"
-"testing"
+	"fmt"
+	"testing"
 )
 
 func TestInfo(t *testing.T) {
@@ -15,5 +15,4 @@ func TestInfo(t *testing.T) {
 	for i := range info.Info {
 		fmt.Println(info.Info[i])
 	}
-
 }

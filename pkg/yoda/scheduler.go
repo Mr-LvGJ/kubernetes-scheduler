@@ -40,7 +40,6 @@ func New(rargs runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	mgrConfig := ctrl.GetConfigOrDie()
 	mgrConfig.QPS = 1000
 	mgrConfig.Burst = 1000
-	klog.V(3).Info("=======================================================")
 
 	_, err := ctrl.NewManager(mgrConfig, ctrl.Options{
 		Scheme:             scheme,
@@ -52,12 +51,6 @@ func New(rargs runtime.Object, h framework.Handle) (framework.Plugin, error) {
 		klog.Error(err)
 		return nil, err
 	}
-	//go func() {
-	//	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-	//		klog.Error(err)
-	//		panic(err)
-	//	}
-	//}()
 	args := &Args{}
 	if err := frameworkruntime.DecodeInto(rargs, args); err != nil {
 		return nil,err
