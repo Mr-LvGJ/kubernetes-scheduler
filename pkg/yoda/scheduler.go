@@ -3,6 +3,9 @@ package yoda
 import (
 	"context"
 	"fmt"
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/advisor"
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/filter"
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/score"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,10 +22,14 @@ const (
 var (
 	_ framework.PreFilterPlugin = &Yoda{}
 	_ framework.FilterPlugin    = &Yoda{}
+	_ framework.PreScorePlugin  = &Yoda{}
+	_ framework.ScorePlugin     = &Yoda{}
+	_ framework.ScoreExtensions = &Yoda{}
 	_ framework.PreBindPlugin   = &Yoda{}
 
 	scheme = runtime.NewScheme()
 )
+
 type Args struct {
 	FavoriteColor  string `json:"favorite_color,omitempty"`
 	FavoriteNumber int    `json:"favorite_number,omitempty"`
@@ -35,6 +42,8 @@ type Yoda struct {
 func (y *Yoda) Name() string {
 	return Name
 }
+
+var res = &advisor.Result{}
 
 func New(rargs runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	mgrConfig := ctrl.GetConfigOrDie()
@@ -53,7 +62,7 @@ func New(rargs runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	}
 	args := &Args{}
 	if err := frameworkruntime.DecodeInto(rargs, args); err != nil {
-		return nil,err
+		return nil, err
 	}
 	klog.V(3).Infof("get plugin config args: %+v", args)
 
@@ -72,8 +81,78 @@ func (y *Yoda) Filter(ctx context.Context, state *framework.CycleState, pod *v1.
 	return framework.NewStatus(framework.Success, "")
 }
 
+func (y *Yoda) PreScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []*v1.Node) *framework.Status {
+	klog.V(3).Infof("collect info for scheduling pod: %v", pod.Name)
+	nodeInfo, err := res.Init()
+	state.Write("nodeInfo", &nodeInfo)
+	if err != nil {
+		klog.Errorf("Get node info Error: %v", err)
+		return framework.NewStatus(framework.Error, err.Error())
+	}
+	for info := range nodeInfo.Info {
+		klog.V(3).Infof("info %v : %v", info, nodeInfo.Info[info])
+	}
+	return framework.NewStatus(framework.Success, "")
+}
+
+func (y *Yoda) Score(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) (int64, *framework.Status) {
+	klog.V(3).Infof("Score pod: %v, node: %v", p.GetName(), nodeName)
+	nodeInfo, err := y.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
+	if err != nil {
+		return 0, framework.NewStatus(framework.Error, fmt.Sprintf("getting node %q from Snapshot: %v", nodeName, err))
+	}
+	currentNodeInfos, err := res.Init()
+	currentNodeInfo := currentNodeInfos.Info[nodeName]
+	klog.V(3).Infof("current node info : %v", currentNodeInfo)
+	t := &advisor.Result{
+		Info: currentNodeInfos.Info,
+	}
+	klog.V(3).Infof("ttttttttttttttttttt: %v", t.Info[nodeName])
+	if err != nil {
+		return 0, framework.NewStatus(framework.Error, "failed to get currentInfo")
+	}
+
+	uNodeScore, err := score.CalculateScore(t, state, p, nodeInfo)
+	if err != nil {
+		klog.Errorf("CalculateScore Error: %v", err)
+		return 0, framework.NewStatus(framework.Error, fmt.Sprintf("Score Node: %v Error: %v", nodeInfo.Node().Name, err))
+	}
+	nodeScore := filter.Uint64ToInt64(uNodeScore)
+	return nodeScore, framework.NewStatus(framework.Success, "")
+}
+
+func (y *Yoda) NormalizeScore(ctx context.Context, state *framework.CycleState, p *v1.Pod, scores framework.NodeScoreList) *framework.Status {
+	klog.V(3).Infof("nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
+	var (
+		highest int64 = 0
+		lowest        = scores[0].Score
+	)
+	for _, nodeScore := range scores {
+		if nodeScore.Score < lowest {
+			lowest = nodeScore.Score
+		}
+		if nodeScore.Score > highest {
+			highest = nodeScore.Score
+		}
+	}
+	if highest == lowest {
+		lowest--
+	}
+
+	for i, nodeScore := range scores {
+		scores[i].Score = (nodeScore.Score - lowest) * framework.MaxNodeScore / (highest - lowest)
+		klog.V(3).Infof("Node: %v, Score: %v in Plugin: Yoda When scheduling Pod: %v/%v", scores[i].Name, scores[i].Score, p.GetNamespace(), p.GetName())
+	}
+
+	return framework.NewStatus(framework.Success, "")
+}
+
+func (y *Yoda) ScoreExtensions() framework.ScoreExtensions {
+	return y
+}
+
 func (y *Yoda) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
-	if nodeInfo, err := y.handle.SnapshotSharedLister().NodeInfos().Get(nodeName) ; err != nil {
+	if nodeInfo, err := y.handle.SnapshotSharedLister().NodeInfos().Get(nodeName); err != nil {
 		return framework.NewStatus(framework.Error, fmt.Sprintf("prebind get node info error: %+v", nodeName))
 	} else {
 		klog.V(3).Infof("prebind node info : %+v", nodeInfo.Node())

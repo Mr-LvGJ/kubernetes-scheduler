@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -49,6 +50,13 @@ type PrometheusMetric struct {
 	Job                  string `json:"job"`
 	Instance             string `json:"instance"`
 	KubernetesIoHostname string `json:"kubernetes_io_hostname"`
+}
+
+func (s *Result) Clone() framework.StateData {
+	c := &Result{
+		Info: s.Info,
+	}
+	return c
 }
 
 func getCpu() ([]PrometheusResult, error) {

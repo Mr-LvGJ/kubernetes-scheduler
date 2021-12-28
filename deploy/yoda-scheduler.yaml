@@ -28,6 +28,13 @@ data:
           enabled:
             - name: yoda
               weight: 1
+        preScore:
+          enabled:
+            - name: yoda
+        score:
+          enabled:
+            - name: yoda
+              weight: 1
         preBind:
           enabled:
             - name: yoda

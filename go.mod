@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/NJUPT-ISL/SCV v0.0.0-20200901022803-46b36eeed646
+	github.com/go-redis/redis/v8 v8.11.4
 	github.com/spf13/cobra v1.1.3
 	k8s.io/api v0.22.3
 	k8s.io/apimachinery v0.22.3
