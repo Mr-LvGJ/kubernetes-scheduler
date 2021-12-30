@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
 const host string = "110.40.247.174:32500"

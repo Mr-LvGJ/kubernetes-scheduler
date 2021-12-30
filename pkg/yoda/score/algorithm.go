@@ -2,6 +2,7 @@ package score
 
 import (
 	"errors"
+
 	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/advisor"
 	"k8s.io/klog/v2"
 
@@ -25,6 +26,11 @@ const (
 	AllocateWeight = 3
 )
 
+type RequestInfo struct {
+	cpuTotal    int64
+	memoryTotal int64
+}
+
 func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod, info *framework.NodeInfo) (uint64, error) {
 	d, err := state.Read("nodeInfo")
 	if err != nil {
@@ -42,6 +48,11 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 func CalculateBasicScore2(info map[string]*advisor.NodeInfo, s *advisor.Result, pod *v1.Pod, nodeInfo *framework.NodeInfo) (uint64, error) {
 	var basicScore int64
 
+	requestInfo := getCpuRequest(pod)
+	capacityInfo := nodeInfo.Allocatable.Clone()
+
+	klog.V(3).Infof("This Node allocatable: %+v, %+v", capacityInfo.Memory, capacityInfo.MilliCPU)
+	klog.V(3).Infof("This pod total request cpu: %v, memory: %v", requestInfo.cpuTotal, requestInfo.memoryTotal)
 	request_diskIO := pod.Annotations["diskIO"]
 	currentInfo := info[nodeInfo.Node().GetName()]
 
@@ -54,6 +65,16 @@ func CalculateBasicScore2(info map[string]*advisor.NodeInfo, s *advisor.Result, 
 	klog.V(3).Infof("request_diskIO: %v, currentInfo diskIO: %v", request_diskIO, currentInfo.DiskIO)
 	klog.V(3).Infof("===== score: %v", basicScore)
 	return uint64(basicScore), nil
+}
+
+func getCpuRequest(pod *v1.Pod) *RequestInfo {
+	res := &RequestInfo{}
+	containers := pod.Spec.Containers
+	for _, container := range containers {
+		res.cpuTotal = res.cpuTotal + container.Resources.Requests.Cpu().Value()
+		res.memoryTotal += container.Resources.Requests.Memory().Value()
+	}
+	return res
 }
 
 //func CalculateBasicScore(value collection.MaxValue, scv *advisor.Result, pod *v1.Pod) uint64 {
