@@ -4,6 +4,8 @@ metadata:
   name: test
   labels:
     app: test
+  annotations:
+    diskIO: 10m
 spec:
   schedulerName: yoda-scheduler
   containers:

@@ -19,19 +19,34 @@ data:
     podInitialBackoffSeconds: 1
     podMaxBackoffSeconds: 10
     profiles:
-      - plugins:
-          filter:
-            enabled:
-              - name: yoda
-                weight: 0
-          preScore:
-            enabled:
-              - name: yoda
-          score:
-            enabled:
-              - name: yoda
-                weight: 300
-        schedulerName: yoda-scheduler
+    - plugins:
+        preFilter:
+          enabled:
+            - name: yoda
+              weight: 1
+        filter:
+          enabled:
+            - name: yoda
+              weight: 1
+        preScore:
+          enabled:
+            - name: yoda
+        score:
+          enabled:
+            - name: yoda
+              weight: 1
+        preBind:
+          enabled:
+            - name: yoda
+              weight: 1
+      pluginConfig:
+      - args:
+          favorite_color: "#326CE5"
+          favorite_number: 7
+          thanks_to: "thockin"
+        name: yoda
+      schedulerName: yoda-scheduler
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -58,8 +73,8 @@ spec:
             name: scheduler-config2
       containers:
         - name: yoda-scheduler
-          image: registry.cn-hangzhou.aliyuncs.com/njupt-isl/yoda-scheduler:2.31
-          imagePullPolicy: Always
+          image: k765171999/yoda-scheduler:2.34
+          imagePullPolicy: IfNotPresent
           args:
             - yoda-scheduler
             - --config=/scheduler/scheduler-config.yaml
@@ -184,6 +199,8 @@ rules:
     resources:
       - storageclasses
       - csinodes
+      - csidrivers
+      - csistoragecapacities
     verbs:
       - watch
       - list
@@ -209,6 +226,18 @@ rules:
       - "core.run-linux.com"
     resources:
       - scvs
+    verbs:
+      - delete
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
     verbs:
       - delete
       - get

@@ -1,14 +1,15 @@
-module github.com/NJUPT-ISL/Yoda-Scheduler
+module github.com/Mr-LvGJ/Yoda-Scheduler
 
 go 1.15
 
 require (
 	github.com/NJUPT-ISL/SCV v0.0.0-20200901022803-46b36eeed646
+	github.com/go-redis/redis/v8 v8.11.4
 	github.com/spf13/cobra v1.1.3
 	k8s.io/api v0.22.3
 	k8s.io/apimachinery v0.22.3
 	k8s.io/component-base v0.22.3
-	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.9.0
 	k8s.io/kubernetes v1.22.3
 	sigs.k8s.io/controller-runtime v0.10.3
 )
