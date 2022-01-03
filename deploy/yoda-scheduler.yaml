@@ -73,12 +73,12 @@ spec:
             name: scheduler-config2
       containers:
         - name: yoda-scheduler
-          image: k765171999/yoda-scheduler:2.34
+          image: registry.cn-qingdao.aliyuncs.com/k765171999/google-samples:yoda-scheduler-2.34
           imagePullPolicy: IfNotPresent
           args:
             - yoda-scheduler
             - --config=/scheduler/scheduler-config.yaml
-            - --v=3
+            - --v=4
           resources:
             requests:
               cpu: "300m"
