@@ -97,11 +97,49 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 }
 
 func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo, resourceLimit map[string]int) (uint64, error) {
+	// 定义各个因素的重要性 a b c d e
+	a := 0.2
+	b := 0.2
+	c := 0.2
+	d := 0.2
+	e := 0.2
 	var res uint64
 	for _, nodeInfo := range nodeList {
 		name := nodeInfo.Node().Name
-		D_cpu := CalculatePodResourceRequest(pod, v1.ResourceCPU, true)
-		D_pri := resourceLimit[name+"priority"]
+		// D 开头代表申请量
+		C_cpu, D_cpu := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceCPU, true)
+		C_mem, D_mem := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceRequestsMemory, true)
+		D_net, _ := strconv.ParseFloat(pod.Annotations["network"],32)
+		D_io, _ := strconv.ParseFloat(pod.Annotations["diskIO"], 32)
+		D_pri, _ := strconv.ParseFloat(pod.Annotations["priority"], 32)
+
+		// M 开头代表实际使用量
+		M_cpu := info[name].Cpu
+		M_mem := info[name].Memory
+		M_net := info[name].NetworkIOUp
+		M_io := info[name].DiskIO
+		M_pri := 100.00 - float64(resourceLimit[name+"priority"])
+
+		// C 开头代表最大量
+		C_net := 1000.00
+		C_io := 100.00
+		C_pri := 100.00
+
+		// S 开头代表如果分配给这个节点，这个节点的实际负载
+		S_cpu := M_cpu + float64(D_cpu) / float64(C_cpu)
+		S_mem := M_mem + float64(D_mem) / float64(C_mem)
+		S_net :=( M_net + D_net) / float64(C_net)
+		S_io := (M_io + D_io) / float64(C_io)
+		S_pri := (M_pri + D_pri) / float64(C_pri)
+
+		miu_cur := (S_cpu + S_mem + S_net + S_io + S_pri )/ 5.0
+		sigma_2 := (a * (S_cpu - miu_cur)* (S_cpu - miu_cur) + b * (S_mem - miu_cur) * (S_mem - miu_cur) +
+			c * (S_net - miu_cur) * (S_net - miu_cur) + d * (S_io - miu_cur) * (S_io - miu_cur) +
+			e * (S_pri - miu_cur) * (S_pri - miu_cur)) / 5.00
+
+
+
+
 
 	}
 	klog.V(3).Infof("")
