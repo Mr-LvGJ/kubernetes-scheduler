@@ -3,12 +3,13 @@ package yoda
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/advisor"
 	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/cache"
 	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/filter"
 	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/score"
 	"github.com/go-redis/redis/v8"
-	"sync"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,10 +40,11 @@ type Args struct {
 	ThanksTo       string `json:"thanks_to,omitempty"`
 }
 type Yoda struct {
-	handle      framework.Handle
-	resToWeight resourceToWeightMap
-	redisClient *redis.Client
-	mx          sync.RWMutex
+	handle        framework.Handle
+	resToWeight   resourceToWeightMap
+	redisClient   *redis.Client
+	mx            sync.RWMutex
+	resourceLimit map[string]int
 }
 type resourceToWeightMap map[v1.ResourceName]int64
 type resourceToValueMap map[v1.ResourceName]int64
@@ -80,11 +82,18 @@ func New(rargs runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	if err := frameworkruntime.DecodeInto(rargs, args); err != nil {
 		return nil, err
 	}
+	resourceLimit := make(map[string]int)
+	nodeList, _ := h.SnapshotSharedLister().NodeInfos().List()
+	for _, nodeInfo := range nodeList {
+		nodeName := nodeInfo.Node().Name
+		resourceLimit[nodeName+"priority"] = 100
+	}
 	klog.V(3).Infof("get plugin config args: %+v", args)
 	return &Yoda{
-		handle:      h,
-		resToWeight: resToWeightMap,
-		redisClient: redisClient,
+		handle:        h,
+		resToWeight:   resToWeightMap,
+		redisClient:   redisClient,
+		resourceLimit: resourceLimit,
 	}, nil
 }
 
@@ -145,7 +154,8 @@ func (y *Yoda) Score(ctx context.Context, state *framework.CycleState, p *v1.Pod
 		klog.V(3).Infof("resouce: %v, allocatable: %v, request: %v", resource, alloc, req)
 	}
 	y.mx.Lock()
-	uNodeScore, err := score.CalculateScore(t, state, p, nodeInfo, nodeList, y.redisClient, allocatable)
+	uNodeScore, err := score.CalculateScore(t, state, p, nodeInfo, nodeList, y.redisClient, allocatable, y.resourceLimit)
+	// uNodeScore, err := score.CalculateScore(t, state, p, nodeInfo, nodeList, y.redisClient, allocatable)
 	y.mx.Unlock()
 	if err != nil {
 		klog.Errorf("CalculateScore Error: %v", err)

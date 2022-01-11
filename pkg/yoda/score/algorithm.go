@@ -44,7 +44,7 @@ type resourceScorer struct {
 }
 type resourceToWeightMap map[v1.ResourceName]int64
 
-func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod, info *framework.NodeInfo, nodeList []*framework.NodeInfo, client *redis.Client, allocatable map[v1.ResourceName]int64) (uint64, error) {
+func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod, info *framework.NodeInfo, nodeList []*framework.NodeInfo, client *redis.Client, allocatable map[v1.ResourceName]int64, resourceLimit map[string]int) (uint64, error) {
 	d, err := state.Read("nodeInfo")
 	if err != nil {
 		return 0, errors.New("Error Get CycleState Info Max Error: " + err.Error())
@@ -94,6 +94,18 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 	//return CalculateBasicScore2(data.Info, s, pod, info, client)
 
 	//return CalculateBasicScore(data.Value, s, pod) + CalculateAllocateScore(info, s) + CalculateActualScore(s), nil
+}
+
+func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo, resourceLimit map[string]int) (uint64, error) {
+	var res uint64
+	for _, nodeInfo := range nodeList {
+		name := nodeInfo.Node().Name
+		D_cpu := CalculatePodResourceRequest(pod, v1.ResourceCPU, true)
+		D_pri := resourceLimit[name+"priority"]
+
+	}
+	klog.V(3).Infof("")
+
 }
 
 func BalancedCpuDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo) (uint64, error) {
