@@ -15,7 +15,7 @@ var (
 // 初始化连接
 func initClient() (err error) {
 	rdb = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     "110.40.247.174:6379",
 		Password: "",  // no password set
 		DB:       0,   // use default DB
 		PoolSize: 100, // 连接池大小
@@ -26,6 +26,11 @@ func initClient() (err error) {
 
 	_, err = rdb.Ping(ctx).Result()
 	return err
+}
+
+func New() *redis.Client {
+	initClient()
+	return rdb
 }
 
 func V8Example() {

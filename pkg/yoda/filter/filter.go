@@ -84,3 +84,12 @@ func StrToInt64(str string) int64 {
 func Uint64ToInt64(intNum uint64) int64 {
 	return StrToInt64(strconv.FormatUint(intNum, 10))
 }
+
+func StrToFloat64(str string) float64 {
+	if float, err := strconv.ParseFloat(str, 64); err != nil {
+		return 0
+	} else {
+		return float64(float)
+	}
+
+}
