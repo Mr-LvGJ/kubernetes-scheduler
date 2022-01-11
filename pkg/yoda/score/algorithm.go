@@ -3,10 +3,12 @@ package score
 import (
 	"context"
 	"errors"
-	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/filter"
-	"github.com/go-redis/redis/v8"
+	"math"
 	"strconv"
 	"time"
+
+	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/filter"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/Mr-LvGJ/Yoda-Scheduler/pkg/yoda/advisor"
 	"k8s.io/klog/v2"
@@ -42,7 +44,7 @@ type resourceScorer struct {
 }
 type resourceToWeightMap map[v1.ResourceName]int64
 
-func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod, info *framework.NodeInfo, nodeList []*framework.NodeInfo, client *redis.Client) (uint64, error) {
+func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod, info *framework.NodeInfo, nodeList []*framework.NodeInfo, client *redis.Client, allocatable map[v1.ResourceName]int64) (uint64, error) {
 	d, err := state.Read("nodeInfo")
 	if err != nil {
 		return 0, errors.New("Error Get CycleState Info Max Error: " + err.Error())
@@ -55,9 +57,9 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 	result, err := client.Get(ctx, "S-"+info.Node().GetName()).Result()
 	klog.V(3).Infof("!!!!!!!!!!!!!!!res: %v", result)
 
-	if err != redis.Nil{
+	if err != redis.Nil {
 		klog.V(3).Infof("exist!!!!===== score: %v", result)
-		return filter.StrToUint64(result),nil
+		return filter.StrToUint64(result), nil
 	}
 
 	klog.V(4).Info("============== begin M-tmp ====================")
@@ -68,6 +70,8 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 		Di := data.Info[name].DiskIO
 		Ui := Di / 50.0
 		u_avg = u_avg + Ui
+		Vi := data.Info[name].Cpu / 100.0
+		client.Set(ctx, "V-"+name, Vi, 0)
 		client.Set(ctx, "U-"+name, Ui, 0)
 	}
 	u_avg = u_avg / float64(len(nodeList))
@@ -83,20 +87,43 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 	M_tmp = M_tmp / float64(len(nodeList))
 	client.Set(ctx, "M-tmp", M_tmp, 0)
 	klog.V(4).Info("============== end M-tmp ====================")
+	return BalancedCpuDiskIOPriority(data.Info, pod, info, client, nodeList)
 
-	return BalancedDiskIOPriority(data.Info, pod, info, client, nodeList)
+	//return BalancedDiskIOPriority(data.Info, pod, info, client, nodeList)
 
 	//return CalculateBasicScore2(data.Info, s, pod, info, client)
 
 	//return CalculateBasicScore(data.Value, s, pod) + CalculateAllocateScore(info, s) + CalculateActualScore(s), nil
 }
 
-func BalancedDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo)(uint64, error){
+func BalancedCpuDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo) (uint64, error) {
+	var res uint64
+	for _, nodeInfo := range nodeList {
+		name := nodeInfo.Node().GetName()
+		Rio, _ := strconv.ParseFloat(pod.Annotations["diskIO"], 32)
+		Rcpu := CalculatePodResourceRequest(pod, v1.ResourceCPU, true)
+		betai := 1.0 / (1.0 + float64(Rcpu)/Rio)
+		alphai := 1 - betai
+		Vi, _ := client.Get(context.Background(), "V-"+name).Float64()
+		Ui, _ := client.Get(context.Background(), "U-"+name).Float64()
+
+		Li := math.Abs(alphai*Vi - betai*Ui)
+		Si := 10.0 - 10.0*Li
+		if name == nodeInfo2.Node().GetName() {
+			res = uint64(Si)
+		}
+		klog.V(4).Infof("NodeName: %v,Rio：%v, Rcpu: %v, betai: %v, alphai: %v, Si: %v", nodeInfo.Node().GetName(), Rio, Rcpu, betai, alphai, Si)
+		client.Set(context.Background(), "S-"+name, Si, 0)
+	}
+	return res, nil
+}
+
+func BalancedDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo) (uint64, error) {
 	M_max := 0.0
 	M_min := 1000000.0
 	nameToM := make(map[string]float64)
 	var res uint64
-	for _, nodeInfo := range nodeList{
+	for _, nodeInfo := range nodeList {
 		klog.V(4).Info("============== begin calculate ====================")
 		klog.V(4).Info("============== begin calculate ====================")
 		klog.V(4).Info("============== begin calculate ====================")
@@ -115,17 +142,17 @@ func BalancedDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, node
 		klog.V(4).Infof("Uj：%v", Uj)
 		U_avg, _ := client.Get(context.Background(), "U-AVG").Float64()
 		klog.V(4).Infof("U_avg：%v", U_avg)
-		len, _ := client.Get(context.Background(),"nodeLen").Float64()
-		F_avg := U_avg - (Uj - Fj) /len
+		len, _ := client.Get(context.Background(), "nodeLen").Float64()
+		F_avg := U_avg - (Uj-Fj)/len
 		klog.V(4).Infof("F_avg：%v", F_avg)
 		M_tmp, _ := client.Get(context.Background(), "M-tmp").Float64()
 		klog.V(4).Infof("M_tmp：%v", M_tmp)
-		Mj := M_tmp - ((Uj - U_avg)*(Uj - U_avg) - (Fj - F_avg)*(Fj - F_avg))/ len
+		Mj := M_tmp - ((Uj-U_avg)*(Uj-U_avg)-(Fj-F_avg)*(Fj-F_avg))/len
 		klog.V(4).Infof("Mj：%v", Mj)
-		if Mj > M_max{
+		if Mj > M_max {
 			M_max = Mj
 		}
-		if (Mj < M_min){
+		if Mj < M_min {
 			M_min = Mj
 		}
 		nameToM[name] = Mj
@@ -137,13 +164,12 @@ func BalancedDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, node
 		name := nodeInfo.Node().GetName()
 		Mi := nameToM[name]
 		Si := 100.0 - (100.0 * (Mi - M_min) / (M_max - M_min))
-		klog.V(4).Infof("Mi：%v, M_min: %v, M_max: %v, Si: %v", Mi, M_min,M_max,Si)
+		klog.V(4).Infof("Mi：%v, M_min: %v, M_max: %v, Si: %v", Mi, M_min, M_max, Si)
 		if name == nodeInfo2.Node().GetName() {
 			res = uint64(Si)
 		}
 		client.Set(context.Background(), "S-"+name, Si, 60*time.Minute)
 	}
-
 
 	klog.V(3).Infof("===== score: %v", res)
 	return res, nil

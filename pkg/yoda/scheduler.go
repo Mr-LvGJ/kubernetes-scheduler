@@ -145,7 +145,7 @@ func (y *Yoda) Score(ctx context.Context, state *framework.CycleState, p *v1.Pod
 		klog.V(3).Infof("resouce: %v, allocatable: %v, request: %v", resource, alloc, req)
 	}
 	y.mx.Lock()
-	uNodeScore, err := score.CalculateScore(t, state, p, nodeInfo, nodeList, y.redisClient)
+	uNodeScore, err := score.CalculateScore(t, state, p, nodeInfo, nodeList, y.redisClient, allocatable)
 	y.mx.Unlock()
 	if err != nil {
 		klog.Errorf("CalculateScore Error: %v", err)
