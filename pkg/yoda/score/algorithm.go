@@ -87,7 +87,7 @@ func CalculateScore(s *advisor.Result, state *framework.CycleState, pod *v1.Pod,
 	M_tmp = M_tmp / float64(len(nodeList))
 	client.Set(ctx, "M-tmp", M_tmp, 0)
 	klog.V(4).Info("============== end M-tmp ====================")
-	return BalancedCpuDiskIOPriority(data.Info, pod, info, client, nodeList)
+	return BalancedAllResourcePriority(data.Info, pod, info, client, nodeList, resourceLimit)
 
 	//return BalancedDiskIOPriority(data.Info, pod, info, client, nodeList)
 
@@ -109,8 +109,8 @@ func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod,
 		name := nodeInfo.Node().Name
 		klog.V(3).Infof("--------------- %v start ----------------", name)
 		// D 开头代表申请量
-		C_cpu, D_cpu := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceCPU, true)
-		C_mem, D_mem := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceRequestsMemory, true)
+		D_cpu := CalculatePodResourceRequest(pod, v1.ResourceCPU, true)
+		D_mem := CalculatePodResourceRequest(pod, v1.ResourceMemory, true)
 		D_net, _ := strconv.ParseFloat(pod.Annotations["network"],32)
 		D_io, _ := strconv.ParseFloat(pod.Annotations["diskIO"], 32)
 		D_pri, _ := strconv.ParseFloat(pod.Annotations["priority"], 32)
@@ -127,6 +127,8 @@ func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod,
 			M_net, M_io, M_pri)
 
 		// C 开头代表最大量
+		C_cpu, _ := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceCPU, true)
+		C_mem, _ := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceMemory, true)
 		C_net := 1000.00
 		C_io := 100.00
 		C_pri := 100.00
