@@ -104,14 +104,18 @@ func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod,
 	d := 0.2
 	e := 0.2
 	var res uint64
+
 	for _, nodeInfo := range nodeList {
 		name := nodeInfo.Node().Name
+		klog.V(3).Infof("--------------- %v start ----------------", name)
 		// D 开头代表申请量
 		C_cpu, D_cpu := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceCPU, true)
 		C_mem, D_mem := CalculateResourceAllocatableRequest(nodeInfo,pod, v1.ResourceRequestsMemory, true)
 		D_net, _ := strconv.ParseFloat(pod.Annotations["network"],32)
 		D_io, _ := strconv.ParseFloat(pod.Annotations["diskIO"], 32)
 		D_pri, _ := strconv.ParseFloat(pod.Annotations["priority"], 32)
+		klog.V(3).Infof("D_cpu: %v, D_mem: %v, D_net: %v, D_io: %v, D_pri: %v", D_cpu, D_mem,
+			D_net, D_io,D_pri)
 
 		// M 开头代表实际使用量
 		M_cpu := info[name].Cpu
@@ -119,11 +123,15 @@ func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod,
 		M_net := info[name].NetworkIOUp
 		M_io := info[name].DiskIO
 		M_pri := 100.00 - float64(resourceLimit[name+"priority"])
+		klog.V(3).Infof("M_cpu: %v, M_mem: %v, M_net: %v, M_io: %v, M_pri: %v", M_cpu, M_mem,
+			M_net, M_io, M_pri)
 
 		// C 开头代表最大量
 		C_net := 1000.00
 		C_io := 100.00
 		C_pri := 100.00
+		klog.V(3).Infof("C_cpu: %v, C_mem: %v, C_net: %v, C_io: %v, C_pri: %v", C_cpu, C_mem,
+			C_net, C_io, C_pri)
 
 		// S 开头代表如果分配给这个节点，这个节点的实际负载
 		S_cpu := M_cpu + float64(D_cpu) / float64(C_cpu)
@@ -131,19 +139,39 @@ func BalancedAllResourcePriority(info map[string]*advisor.NodeInfo, pod *v1.Pod,
 		S_net :=( M_net + D_net) / float64(C_net)
 		S_io := (M_io + D_io) / float64(C_io)
 		S_pri := (M_pri + D_pri) / float64(C_pri)
+		klog.V(3).Infof("S_cpu: %v, S_mem: %v, S_net: %v, S_io: %v, S_pri: %v", S_cpu, S_mem,
+			S_net, S_io, S_pri)
 
 		miu_cur := (S_cpu + S_mem + S_net + S_io + S_pri )/ 5.0
 		sigma_2 := (a * (S_cpu - miu_cur)* (S_cpu - miu_cur) + b * (S_mem - miu_cur) * (S_mem - miu_cur) +
 			c * (S_net - miu_cur) * (S_net - miu_cur) + d * (S_io - miu_cur) * (S_io - miu_cur) +
 			e * (S_pri - miu_cur) * (S_pri - miu_cur)) / 5.00
 
+		klog.V(3).Infof("miu_cur: %v, sigma_2: %v", miu_cur, sigma_2)
 
+		// delta 开头代表的是可以进行分配的余额
+		delta_cpu := (100.0 - M_cpu) * float64(C_cpu)
+		delta_mem := (100.0 - M_mem) * float64(C_mem)
+		delta_net := C_net - M_net
+		delta_io := C_io - M_io
+		delta_pri := C_pri - M_pri
+		klog.V(3).Infof("delta_cpu: %v, delta_mem: %v, delta_net: %v, delta_io: %v, delta_pri: %v", delta_cpu, delta_mem,
+			delta_net, delta_io, delta_pri)
 
+		if delta_cpu < float64(D_cpu) || delta_mem < float64(D_mem) || delta_net < D_net ||
+			delta_io < D_io || delta_pri < D_pri{
+			client.Set(context.Background(), "S-" + name, 0.0, 0)
+			continue
+		}
 
+		F_score := 10.0 - 100.0 * sigma_2
+		F_score = F_score * math.Pow10(len(nodeList) -1 )
+		klog.V(3).Infof("NodeName: %v, Score: %v", name, F_score)
+		client.Set(context.Background(), "S-" + name, F_score, 0)
+		klog.V(3).Infof("--------------- %v end ----------------", name)
 
 	}
-	klog.V(3).Infof("")
-
+	return res, nil
 }
 
 func BalancedCpuDiskIOPriority(info map[string]*advisor.NodeInfo, pod *v1.Pod, nodeInfo2 *framework.NodeInfo, client *redis.Client, nodeList []*framework.NodeInfo) (uint64, error) {
